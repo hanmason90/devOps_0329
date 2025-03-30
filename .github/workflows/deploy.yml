@@ -1,0 +1,52 @@
+name: Deploy to ubuntu Server
+
+on:
+  push:
+    branches:
+      -main
+jobs:
+  build:
+    runs-on: ubuntu-lastest
+    steps:
+      # 코드 체크아웃
+    - name: Checkout repository
+      uses : actions./setup-java@v1
+      with:
+        java-version: '17'
+    # gradlew 권한설정추가
+    - name: Build with gradle
+      run:
+        chmod +x ./gradlew
+    # gradle 빌드
+    - name: Build with gradle
+      run: ./gradlew build
+
+    # SSH 설정
+    - name: Set SSH key permissions
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+
+    # SSH key 추가
+    - name: Add SSH key
+      uses: webfacory/ssh-agent@v0.5.3
+      with:
+        ssh-private-key: ${{screts.SERVER_SSH_KEY}}
+
+    # 알려진 호스트 추가
+    - name: Add known_hosts
+      run: |
+        ssh-keyscan -t ed25519 118.46.72.171 >> ~/.ssh/known_hosts
+
+    # Deploy to Server
+    - name: Deploy to Server
+      run: scp build/libs/*.jar mason@118.46.72.171:~/
+
+    # 실행 ( 기존 jar 죽이기)
+    - name: Run SSH commands
+      run: |
+        ssh -i ~/.ssh/id_rsa mason@118.46.72.171 << 'EOF'
+          pkill -f 'java -jar' || true
+          nohup java -jar ~/devops_demo-0.0.1-SNAPSHOT.jar > log.txt 2>&1 &
+        EOF
